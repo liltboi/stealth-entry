@@ -1,0 +1,6 @@
+[
+  { "name": "1-shadow-protocol.jpg", "query": "?shot=play&seed=1" },
+  { "name": "2-alert.jpg", "query": "?shot=alert&seed=1" },
+  { "name": "3-title.jpg", "query": "?shot=start&seed=1" },
+  { "name": "4-mission-complete.jpg", "query": "?shot=success&seed=1" }
+]
