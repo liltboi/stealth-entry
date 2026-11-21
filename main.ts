@@ -1,41 +1,65 @@
-// A working best-game-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
-// modules, no library and no network request), and the program hands it in. It copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
-// judge reads, with the vendored make.fun library. A starting point, not a winner: Block Dodger, a
-// plain 2D canvas game where a paddle dodges falling blocks and catches coins, with a title screen,
-// score, lives and levels, game over and restart, flat colours and no sound. Build your own game
-// (any genre, any library you vendor under game/, or none), put your 3 or 4 PNG or JPEG screenshots
-// in screenshots/ (the first by name is the cover) and run it.
+// Shadow Protocol — hand-in program for make.fun's best-stealth-game bounty.
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
+// The playable build is game/: plain static assets (index.html plus local ES modules) that a
+// desktop browser opens offline. The judge-facing captures are screenshots/. This program stages
+// both trees into the drop folder and then emits dossier.json there, using the vendored
+// make.fun grader so the manifest is derived from precisely the files being submitted.
+//
+// Inside the grader container the drop folder is /output; elsewhere point MAKEFUN_OUTPUT_DIR at
+// it. Run the hand-in with:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+//
+// To play locally, run `node serve.ts` and open http://localhost:8080.
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+/** Directory holding this script, and therefore game/, screenshots/ and vendor/. */
+const projectRoot = dirname(fileURLToPath(import.meta.url));
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+/** Where the staged submission goes: the grader's /output, or MAKEFUN_OUTPUT_DIR if set. */
+const dropDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
+/**
+ * The scorer's limits, copied from the reference gate. `text_max_bytes` is the only cap that
+ * affects the bytes written; the rest exist to reject here what the scorer would reject there:
+ * more than 4 screenshots (or any over 256 KiB), more than 993 files or 48 MiB under game/, or
+ * any game/ path longer than 1000 bytes.
+ */
+function collectOutputCaps() {
+  return {
     text_max_bytes: 163840,
     screenshots: { max: 4, max_bytes: 262144 },
     game_max_files: 993,
     game_max_bytes: 50331648,
     game_path_max_bytes: 1000,
-  }),
-);
+  };
+}
+
+/** Copy game/ and screenshots/ from the project into the drop folder. */
+function stageArtifacts(sourceRoot: string, destination: string): void {
+  mkdirSync(destination, { recursive: true });
+
+  // The game itself is required; cpSync throws if it is missing.
+  cpSync(join(sourceRoot, 'game'), join(destination, 'game'), { recursive: true });
+
+  // Screenshots are optional, but the drop folder always gets the directory.
+  const stagedShots = join(destination, 'screenshots');
+  mkdirSync(stagedShots, { recursive: true });
+
+  const sourceShots = join(sourceRoot, 'screenshots');
+  if (existsSync(sourceShots)) {
+    cpSync(sourceShots, stagedShots, { recursive: true });
+  }
+}
+
+/** Build the judge's summary from the staged tree and write it as dossier.json. */
+function writeDossier(destination: string): void {
+  const dossier = buildDossier(destination, collectOutputCaps());
+  writeFileSync(join(destination, 'dossier.json'), dossier);
+}
+
+stageArtifacts(projectRoot, dropDir);
+writeDossier(dropDir);
